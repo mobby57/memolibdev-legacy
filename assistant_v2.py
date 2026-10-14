@@ -10,13 +10,15 @@ from codebase_index import CodebaseIndex
 from tool_use import ToolRegistry, parse_tool_calls, make_standard_tools
 
 
-SYSTEM_PROMPT = """Tu es MemoLibDev, un assistant de code local.
+SYSTEM_PROMPT = """Tu es MemoLibDev, assistant de code local.
+
+OUTILS : read_file(path), list_files(pattern), find_symbol(name).
 
 REGLES :
-- Reponds TOUJOURS directement en francais, sans demander la permission.
-- Si on te demande d'expliquer du code, fais-le avec ce que tu sais.
-- N'utilise les outils QUE si on te demande explicitement de lire ou modifier un fichier.
-- Ne dis JAMAIS "je vais lire" puis t'arreter. Soit tu le fais, soit tu reponds.
+- Reponds TOUJOURS en francais, directement.
+- Pour lire un fichier, emets :
+<tool_call>{"name": "read_file", "args": {"path": "..."}}</tool_call>
+- Ne dis JAMAIS "je ne peux pas lire les fichiers".
 - Reponds en 2-5 phrases concises."""
 
 
@@ -63,6 +65,49 @@ class AssistantV2:
 
         parts.append(f"Demande actuelle: {user_text}")
         return "\n\n".join(parts)
+
+    def _run_agent_loop(self, prompt: str, max_iters: int = 3):
+        """Execute les <tool_call> du modele jusqu'a reponse finale."""
+        from tool_use import parse_tool_calls
+        for _ in range(max_iters):
+            response = ""
+            for chunk in stream_ollama(
+                prompt, model=self.model, system=SYSTEM_PROMPT
+            ):
+                response += chunk
+
+            calls = parse_tool_calls(response)
+            if not calls:
+                return response, []
+
+            results = []
+            for name, args in calls:
+                res = self.registry.execute(name, args)
+                results.append(f"[{name}] {res[:1500]}")
+
+            prompt = (
+                prompt
+                + "\n\n--- Reponse precedente ---\n"
+                + response
+                + "\n\n--- Resultats outils ---\n"
+                + "\n".join(results)
+                + "\n\n--- Ta reponse finale en francais, sans tool_call ---\n"
+            )
+        return response, results
+
+    def chat_with_tools(
+        self,
+        user_text: str,
+        on_token=None,
+    ) -> str:
+        """Chat avec boucle agentique : execute les outils automatiquement."""
+        self.conversation.add("user", user_text)
+        prompt = self.build_prompt(user_text)
+        response, _ = self._run_agent_loop(prompt)
+        if on_token and response:
+            on_token(response)
+        self.conversation.add("assistant", response)
+        return response
 
     def chat(
         self,

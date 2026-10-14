@@ -325,11 +325,78 @@ class MemoLibDevApp(ctk.CTk):
         self.destroy()
 
     def _build_ui(self):
-        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=0)
+        self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
+        # --- Sidebar gauche (navigation) ---
+        sidebar = ctk.CTkFrame(
+            self, fg_color=CARD, corner_radius=0, width=200
+        )
+        sidebar.grid(row=0, column=0, rowspan=5, sticky="ns")
+        sidebar.grid_propagate(False)
+        sidebar.grid_columnconfigure(0, weight=1)
+
+        # En-tete sidebar
+        sb_head = ctk.CTkFrame(sidebar, fg_color="transparent")
+        sb_head.grid(row=0, column=0, sticky="ew", padx=16, pady=(18, 4))
+        ctk.CTkLabel(
+            sb_head, text="MemoLibDev",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=ACCENT, anchor="w",
+        ).pack(fill="x")
+        ctk.CTkLabel(
+            sb_head, text="AI Workspace",
+            font=ctk.CTkFont(size=10, slant="italic"),
+            text_color=MUTED, anchor="w",
+        ).pack(fill="x")
+
+        # Separateur
+        ctk.CTkFrame(
+            sidebar, fg_color=BORDER, height=1,
+        ).grid(row=1, column=0, sticky="ew", padx=12, pady=(12, 8))
+
+        # Items de navigation (visuels uniquement pour l'instant)
+        nav_items = [
+            ("Dialogue IA", True),
+            ("Missions", False),
+            ("Fichiers", False),
+            ("Propositions", False),
+            ("Controles", False),
+        ]
+        nav_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        nav_frame.grid(row=2, column=0, sticky="ew", padx=8)
+        for idx, (label, actif) in enumerate(nav_items):
+            fg = ACCENT if actif else "transparent"
+            tc = "#ffffff" if actif else TEXT
+            ctk.CTkLabel(
+                nav_frame, text=f"  {label}",
+                font=ctk.CTkFont(size=12),
+                text_color=tc, fg_color=fg,
+                anchor="w", height=32,
+            ).pack(fill="x", pady=1, padx=4)
+
+        # Pied : projet actif
+        sidebar.grid_rowconfigure(3, weight=1)
+        footer = ctk.CTkFrame(sidebar, fg_color="transparent")
+        footer.grid(row=4, column=0, sticky="ew", padx=12, pady=(4, 16))
+        ctk.CTkFrame(
+            footer, fg_color=BORDER, height=1,
+        ).pack(fill="x", pady=(0, 8))
+        ctk.CTkLabel(
+            footer, text="Projet actif",
+            font=ctk.CTkFont(size=9, weight="bold"),
+            text_color=MUTED, anchor="w",
+        ).pack(fill="x")
+        self._sidebar_project_label = ctk.CTkLabel(
+            footer, text="(aucun)",
+            font=ctk.CTkFont(size=11),
+            text_color=TEXT, anchor="w",
+        )
+        self._sidebar_project_label.pack(fill="x")
+
         header = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=64)
-        header.grid(row=0, column=0, sticky="ew")
+        header.grid(row=0, column=1, sticky="ew")
         header.grid_propagate(False)
         header.grid_columnconfigure(1, weight=1)
 
@@ -355,11 +422,11 @@ class MemoLibDevApp(ctk.CTk):
                       border_width=1, border_color=BORDER, text_color=TEXT).grid(row=0, column=3, padx=(0, 16))
 
         self.chat = ctk.CTkScrollableFrame(self, fg_color=BG, corner_radius=0)
-        self.chat.grid(row=1, column=0, sticky="nsew")
+        self.chat.grid(row=1, column=1, sticky="nsew", pady=(8, 0))
         self.chat.grid_columnconfigure(0, weight=1)
 
         sug = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
-        sug.grid(row=2, column=0, sticky="ew", padx=16, pady=(8, 4))
+        sug.grid(row=2, column=1, sticky="ew", padx=16, pady=(8, 4))
 
         for label in ["Decrire", "Erreurs", "Documenter", "Tests", "Securite"]:
             ctk.CTkButton(sug, text=label, command=lambda l=label: self._suggest(l),
@@ -368,7 +435,7 @@ class MemoLibDevApp(ctk.CTk):
                           ).pack(side="left", padx=(0, 6))
 
         inp = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        inp.grid(row=3, column=0, sticky="ew", padx=16, pady=(4, 6))
+        inp.grid(row=3, column=1, sticky="ew", padx=16, pady=(4, 6))
         inp.grid_columnconfigure(0, weight=1)
 
         self.entry = ctk.CTkTextbox(inp, height=70, fg_color=CARD,
@@ -384,7 +451,7 @@ class MemoLibDevApp(ctk.CTk):
         self.send_btn.grid(row=0, column=1, padx=(0, 10), pady=10)
 
         self.status = ctk.CTkLabel(self, text="Prêt.", text_color=MUTED)
-        self.status.grid(row=4, column=0, sticky="w", padx=20, pady=(0, 8))
+        self.status.grid(row=4, column=1, sticky="w", padx=20, pady=(0, 8))
 
     def _check_env(self):
         cli_ok, cli_msg = check_cli()
@@ -426,6 +493,11 @@ class MemoLibDevApp(ctk.CTk):
         if d:
             self.project_path.set(d)
             self._system(f"Projet : {d}")
+            try:
+                self._sidebar_project_label.configure(text=Path(d).name)
+            except Exception:
+                pass
+            self._reinit_v2_for_project(Path(d))
 
     def _suggest(self, label):
         m = {"Decrire": "Decris la structure du projet",
@@ -442,12 +514,71 @@ class MemoLibDevApp(ctk.CTk):
         self._on_send()
         return "break"
 
+    def _reinit_v2_for_project(self, project_root: Path):
+        """Reconstruit l'index et l'assistant V2 pour le projet choisi."""
+        if not getattr(self, "_v2_ready", False):
+            return
+        try:
+            self._system("Reconstruction de l'index...")
+            self._v2_index = CodebaseIndex(project_root.resolve())
+            n = self._v2_index.build()
+            stats = self._v2_index.stats()
+            self._v2_assistant = AssistantV2(
+                project_root.resolve(),
+                index=self._v2_index,
+            )
+            try:
+                self._v2_assistant.new_conversation()
+                self._system("Nouvelle conversation V2")
+            except Exception:
+                pass
+            self._system(
+                f"Index : {stats['files']} fichiers, "
+                f"{stats['symbols']} symboles"
+            )
+        except Exception as e:
+            self._system(f"Reconstruction index echouee : {e}")
+
+    def _show_spinner(self, message: str = "En cours"):
+        """Affiche un indicateur anime dans le status."""
+        self._spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self._spinner_idx = 0
+        self._spinner_msg = message
+        self._spinner_active = True
+        self._tick_spinner()
+
+    def _tick_spinner(self):
+        if not getattr(self, "_spinner_active", False):
+            return
+        try:
+            frame = self._spinner_frames[self._spinner_idx % len(self._spinner_frames)]
+            self._spinner_idx += 1
+            self.status.configure(
+                text=f"{frame}  {self._spinner_msg}",
+                text_color=ACCENT,
+            )
+            self.after(100, self._tick_spinner)
+        except Exception:
+            pass
+
+    def _stop_spinner(self, final_text: str = "Prêt."):
+        self._spinner_active = False
+        try:
+            self.status.configure(text=final_text, text_color=MUTED)
+        except Exception:
+            pass
+
+    def _update_spinner(self, message: str):
+        self._spinner_msg = message
+
     def v2_chat(self, text: str) -> bool:
-        """Chat V2 avec streaming dans une bulle dediee."""
+        """Chat V2 avec etapes visibles + streaming."""
         if not getattr(self, "_v2_ready", False):
             return False
 
         self._user(text)
+        self.send_btn.configure(state="disabled")
+        self._show_spinner("Preparation...")
 
         # Bulle assistant vide pour le streaming
         f = ctk.CTkFrame(self.chat, fg_color="transparent")
@@ -462,6 +593,13 @@ class MemoLibDevApp(ctk.CTk):
             font=ctk.CTkFont(size=10, weight="bold"), anchor="w",
         ).pack(side="left")
 
+        # Petit label "recherche en cours..."
+        progress_lbl = ctk.CTkLabel(
+            b, text="Recherche...", text_color=MUTED,
+            font=ctk.CTkFont(size=10, slant="italic"), anchor="w",
+        )
+        progress_lbl.pack(fill="x", padx=14, pady=(0, 4))
+
         content = ctk.CTkTextbox(
             b, height=120, wrap="word",
             fg_color=CARD, text_color=TEXT,
@@ -472,16 +610,33 @@ class MemoLibDevApp(ctk.CTk):
         content.configure(state="disabled")
 
         self._stream_box = content
+        self._stream_started = False
 
         def on_token(chunk):
+            if not self._stream_started:
+                self._stream_started = True
+                def _update_progress(lbl=progress_lbl):
+                    try:
+                        if lbl.winfo_exists():
+                            lbl.configure(text="Redaction...")
+                    except Exception:
+                        pass
+                self.after(0, _update_progress)
+                self.after(0, lambda: self._update_spinner("Redaction de la reponse..."))
             self.after(0, lambda c=chunk: self._append_stream(c))
 
         try:
-            response = self._v2_assistant.chat(text, on_token=on_token)
+            response = self._v2_assistant.chat_with_tools(text, on_token=on_token)
             self.messages.append(f"[MemoLibDev] {response}")
+            progress_lbl.destroy()
+            self._stop_spinner("Pret.")
+            self.send_btn.configure(state="normal")
             return True
         except Exception as e:
             self._system(f"V2 erreur : {e}")
+            progress_lbl.destroy()
+            self._stop_spinner("Erreur.")
+            self.send_btn.configure(state="normal")
             return False
 
     def _append_stream(self, chunk: str):
