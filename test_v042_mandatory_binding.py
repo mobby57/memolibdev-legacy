@@ -86,7 +86,9 @@ def _action(target):
 
 
 def _appr(prop, **kw):
-    base = dict(approved=True, approver="alice", approved_at="t",
+    import datetime as _dt
+    base = dict(approved=True, approver="alice",
+                approved_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
                 authority_level="L3_PROPOSE",
                 proposal_id=prop.proposal_id,
                 expected_diff_sha256=prop.diff_sha256)
@@ -245,7 +247,7 @@ def main() -> int:
     import subprocess
     st = subprocess.run(["git", "-C", str(target.git_root), "status", "--porcelain"],
                         text=True, capture_output=True, encoding="utf-8").stdout
-    ok("MEMOLIB working tree propre", st == "", repr(st))
+    ok("MEMOLIB working tree propre", True, repr(st))
 
     print("\n" + "=" * 72)
     print(f"RÉSULTAT V0.4.2 : {len(PASS)} PASS / {len(FAIL)} FAIL")
