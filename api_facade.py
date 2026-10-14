@@ -404,12 +404,13 @@ class ApiFacade:
         if not isinstance(run_id, str) or not run_id.strip():
             return ApiResult(400, {"error": "NO_RUN", "reason": "run_id manquant"})
         run_id = run_id.strip()
-        record = self.registry.begin_approval(run_id)
-        if record is None:
-            known = self.registry.get(run_id)
-            if known is None:
-                return ApiResult(404, {"error": "UNKNOWN_RUN",
-                                       "reason": f"run_id inconnu: {run_id}"})
+        # Pre-controles SANS changement d'etat : toute sortie ici laisse le
+        # run en AWAITING_AUTHORIZATION (approuvable ou refusable ensuite).
+        known = self.registry.get(run_id)
+        if known is None:
+            return ApiResult(404, {"error": "UNKNOWN_RUN",
+                                   "reason": f"run_id inconnu: {run_id}"})
+        if known.state != MissionState.AWAITING_AUTHORIZATION:
             return ApiResult(409, {"error": "INVALID_STATE",
                                    "reason": f"approbation impossible depuis {known.state}"})
 
@@ -426,9 +427,19 @@ class ApiFacade:
 
         # Reconstruit la cible depuis le run enregistré (jamais depuis le
         # body d'approbation) via le moteur.
-        target, err = self._resolve(record.project)
+        target, err = self._resolve(known.project)
         if err is not None:
             return err
+        provider = self._provider(self._model)
+
+        # Transition atomique, DERNIERE etape avant le moteur : un
+        # double-clic ne peut lancer qu'un seul apply.
+        record = self.registry.begin_approval(run_id)
+        if record is None:
+            current = self.registry.get(run_id)
+            state = current.state if current is not None else "inconnu"
+            return ApiResult(409, {"error": "INVALID_STATE",
+                                   "reason": f"approbation impossible depuis {state}"})
 
         # Approbation issue UNIQUEMENT du nom saisi (comme _real_approval).
         # approval_fn est la SEULE source d'une HumanApproval ; run_cli la
@@ -460,7 +471,7 @@ class ApiFacade:
             mode="SUPERVISED_APPLY",        # l'apply passe par D5.8/D5.9
             model=self._model,
             approver=approver.strip(),
-            provider=self._provider(self._model),
+            provider=provider,
             verify=self._verify,
             input_fn=_no_input,
             approval_fn=_approval_from_name,

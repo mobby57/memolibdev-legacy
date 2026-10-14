@@ -57,6 +57,41 @@ CLI_TIMEOUT_SECONDS = 600
 PROCESS_STOP_GRACE_SECONDS = 5
 
 
+def _get_project_identity(project_path: str) -> dict:
+    """Identifie le depot Git cible avec des commandes locales en lecture seule."""
+    def git_value(*args: str) -> str:
+        result = subprocess.run(
+            ["git", "-C", project_path, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            check=True,
+        )
+        return result.stdout.strip()
+
+    return {
+        "root": git_value("rev-parse", "--show-toplevel"),
+        "branch": git_value("branch", "--show-current") or "(HEAD detachee)",
+        "head": git_value("rev-parse", "--short", "HEAD"),
+    }
+
+
+def _detect_mission_mode(mission: str) -> str:
+    """Conserve la regle de detection du mode de la GUI."""
+    mission_lower = mission.lower()
+    keywords_analyse = (
+        "decris", "décris", "analyse", "explique", "liste",
+        "documente", "cherche", "trouve", "signale", "identifie",
+        "verifie", "vérifie", "resume", "résume", "presente",
+        "présente", "explore", "inspecte", "comprends",
+    )
+    if any(k in mission_lower for k in keywords_analyse):
+        return "READ_ONLY"
+    return "PROPOSE"
+
+
 @dataclass(frozen=True)
 class ProcessOutput:
     lines: list[str]
@@ -351,6 +386,15 @@ class MemoLibDevApp(ctk.CTk):
             "Je ne modifie rien sans votre accord.")
 
     def _choose_project(self):
+        if (
+            getattr(self, "_identity_check_pending", False)
+            or getattr(self, "busy", False)
+        ):
+            self._system(
+                "Choix du projet indisponible pendant une operation."
+            )
+            return
+
         d = filedialog.askdirectory(title="Choisir le dossier de code")
         if d:
             self.project_path.set(d)
@@ -372,20 +416,178 @@ class MemoLibDevApp(ctk.CTk):
         return "break"
 
     def _on_send(self):
-        if self.busy:
-            return
         text = self.entry.get("1.0", "end").strip()
         if not text:
             return
-        self.entry.delete("1.0", "end")
+
+        if getattr(self, "_identity_check_pending", False):
+            return
 
         proj = self.project_path.get()
         if not proj or proj.startswith("("):
-            self._assistant("Aucun projet selectionne. Cliquez sur 'Choisir projet'.")
+            self._assistant(
+                "Aucun projet selectionne. Cliquez sur 'Choisir projet'. "
+                "Votre texte a ete conserve."
+            )
             return
 
+        self._identity_check_pending = True
+        self.send_btn.configure(state="disabled")
+        self._system("Verification du depot Git en cours...")
+
+        def verify_target():
+            try:
+                identity = _get_project_identity(proj)
+                error = None
+            except Exception as exc:
+                identity = None
+                error = f"{type(exc).__name__}: {exc}"
+
+            self._post_ui(
+                self._on_project_identity_checked,
+                text,
+                proj,
+                identity,
+                error,
+            )
+
+        try:
+            threading.Thread(
+                target=verify_target,
+                name="MemoLibDev-GitIdentity",
+                daemon=True,
+            ).start()
+        except Exception as exc:
+            self._identity_check_pending = False
+            self.send_btn.configure(state="normal")
+            self._assistant(
+                f"Verification impossible : {type(exc).__name__}: {exc}\n"
+                "Votre texte a ete conserve."
+            )
+
+    def _on_project_identity_checked(self, text, proj, identity, error):
+        self._identity_check_pending = False
+        self.send_btn.configure(state="normal")
+
+        if error or identity is None:
+            self._assistant(
+                "Mission non lancee : depot Git non verifiable. "
+                f"Detail : {error or 'identite absente'}\\n"
+                "Votre texte a ete conserve."
+            )
+            return
+
+        # Refuser une confirmation devenue obsolette.
+        if self.project_path.get() != proj:
+            self._system("Mission annulee : le projet selectionne a change.")
+            return
+
+        if self.entry.get("1.0", "end").strip() != text:
+            self._system(
+                "Mission annulee : le texte a change pendant la verification. "
+                "Relisez votre texte puis relancez la demande."
+            )
+            return
+
+        mode = _detect_mission_mode(text)
+        confirmation = (
+            "Confirmer le lancement de cette mission ?\\n\\n"
+            f"Depot : {identity['root']}\\n"
+            f"Branche : {identity['branch']}\\n"
+            f"Commit : {identity['head']}\\n"
+            f"Mode : {mode}\\n\\n"
+            f"Mission :\\n{text}\\n\\n"
+            "La confirmation autorise le lancement, pas "
+            "l'application automatique d'un changement."
+        )
+
+        if not messagebox.askyesno(
+            "Confirmer la mission MemoLibDev",
+            confirmation,
+            parent=self,
+        ):
+            self._system("Mission annulee par l'utilisateur.")
+            return
+
+        # Garder le verrou pendant la seconde verification Git.
+        self._identity_check_pending = True
+        self.send_btn.configure(state="disabled")
+        self._system("Nouvelle verification Git avant lancement...")
+
+        def verify_final_target():
+            try:
+                final_identity = _get_project_identity(proj)
+                final_error = None
+            except Exception as exc:
+                final_identity = None
+                final_error = f"{type(exc).__name__}: {exc}"
+
+            self._post_ui(
+                self._on_final_identity_checked,
+                text,
+                proj,
+                identity,
+                final_identity,
+                final_error,
+            )
+
+        try:
+            threading.Thread(
+                target=verify_final_target,
+                name="MemoLibDev-GitFinalCheck",
+                daemon=True,
+            ).start()
+        except Exception as exc:
+            self._identity_check_pending = False
+            self.send_btn.configure(state="normal")
+            self._assistant(
+                f"Verification finale impossible : "
+                f"{type(exc).__name__}: {exc}\\n"
+                "Mission non lancee. Texte conserve."
+            )
+
+    def _on_final_identity_checked(
+        self, text, proj, identity, final_identity, error
+    ):
+        self._identity_check_pending = False
+        self.send_btn.configure(state="normal")
+
+        if error or final_identity is None:
+            self._assistant(
+                "Mission non lancee : seconde verification Git impossible. "
+                f"Detail : {error or 'identite absente'}\\n"
+                "Votre texte a ete conserve."
+            )
+            return
+
+        if self.project_path.get() != proj:
+            self._system(
+                "Mission annulee : le projet selectionne a change."
+            )
+            return
+
+        if self.entry.get("1.0", "end").strip() != text:
+            self._system(
+                "Mission annulee : le texte a change pendant la "
+                "verification finale. Texte conserve."
+            )
+            return
+
+        keys = ("root", "branch", "head")
+        if any(
+            final_identity.get(key) != identity.get(key)
+            for key in keys
+        ):
+            self._assistant(
+                "Mission non lancee : l'identite Git a change "
+                "depuis la confirmation. Verifiez le depot et relancez. "
+                "Votre texte a ete conserve."
+            )
+            return
+
+        self.entry.delete("1.0", "end")
         self._user(text)
-        self._run(proj, text)
+        self._run(final_identity["root"], text)
 
     def _user(self, t):
         self._bubble(t, "user")
@@ -396,32 +598,93 @@ class MemoLibDevApp(ctk.CTk):
     def _system(self, t):
         f = ctk.CTkFrame(self.chat, fg_color="transparent")
         f.pack(fill="x", padx=20, pady=4)
-        ctk.CTkLabel(f, text=t, text_color=MUTED,
-                     font=ctk.CTkFont(size=10, slant="italic"),
-                     anchor="w", justify="left", wraplength=800).pack(fill="x")
+        ctk.CTkLabel(
+            f,
+            text=t,
+            text_color=MUTED,
+            font=ctk.CTkFont(size=10, slant="italic"),
+            anchor="w",
+            justify="left",
+            wraplength=800,
+        ).pack(fill="x")
+        self.messages.append(f"[Système] {t}")
 
     def _bubble(self, text, role):
         f = ctk.CTkFrame(self.chat, fg_color="transparent")
         f.pack(fill="x", padx=20, pady=8)
 
         if role == "user":
-            bg, fg, anchor, padx, author = USER, "#ffffff", "e", (60, 0), "Vous"
+            bg, fg, anchor, padx, author = (
+                USER, "#ffffff", "e", (60, 0), "Vous"
+            )
         else:
-            bg, fg, anchor, padx, author = CARD, TEXT, "w", (0, 60), "MemoLibDev"
+            bg, fg, anchor, padx, author = (
+                CARD, TEXT, "w", (0, 20), "MemoLibDev"
+            )
 
         b = ctk.CTkFrame(f, fg_color=bg, corner_radius=14)
-        b.pack(anchor=anchor, padx=padx)
+        b.pack(anchor=anchor, padx=padx, fill="x")
 
-        ctk.CTkLabel(b, text=author, text_color=ACCENT if role == "assistant" else "#ffffff",
-                     font=ctk.CTkFont(size=10, weight="bold"), anchor="w"
-                     ).pack(fill="x", padx=14, pady=(10, 2))
+        header = ctk.CTkFrame(b, fg_color="transparent")
+        header.pack(fill="x", padx=14, pady=(10, 2))
+        header.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(b, text=text, text_color=fg,
-                     font=ctk.CTkFont(size=12), anchor="w", justify="left",
-                     wraplength=520).pack(fill="x", padx=14, pady=(0, 10))
+        ctk.CTkLabel(
+            header,
+            text=author,
+            text_color=ACCENT if role == "assistant" else "#ffffff",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
+
+        if role == "assistant":
+            ctk.CTkButton(
+                header,
+                text="Copier",
+                width=76,
+                height=28,
+                command=lambda value=text: self._copy_text(value),
+            ).grid(row=0, column=1, padx=(8, 0))
+
+            visible_lines = min(text.count("\n") + 1, 18)
+            content = ctk.CTkTextbox(
+                b,
+                height=max(90, visible_lines * 22),
+                wrap="word",
+                fg_color=bg,
+                text_color=fg,
+                border_width=0,
+                font=ctk.CTkFont(size=12),
+            )
+            content.pack(fill="x", expand=True, padx=10, pady=(0, 10))
+            content.insert("1.0", text)
+            content.configure(state="disabled")
+        else:
+            ctk.CTkLabel(
+                b,
+                text=text,
+                text_color=fg,
+                font=ctk.CTkFont(size=12),
+                anchor="w",
+                justify="left",
+                wraplength=520,
+            ).pack(fill="x", padx=14, pady=(0, 10))
 
         self.messages.append(f"[{author}] {text}")
         self.after(80, self._scroll)
+
+    def _copy_text(self, text):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update_idletasks()
+            self.status.configure(
+                text="Réponse copiée dans le presse-papiers."
+            )
+        except Exception as exc:
+            self.status.configure(
+                text=f"Copie impossible : {type(exc).__name__}"
+            )
 
     def _scroll(self):
         try:
@@ -480,19 +743,15 @@ class MemoLibDevApp(ctk.CTk):
                 return
 
             # Detecter automatiquement le mode selon la mission
-            mission_lower = mission.lower()
-            keywords_analyse = (
-                "decris", "décris", "analyse", "explique", "liste",
-                "documente", "cherche", "trouve", "signale", "identifie",
-                "verifie", "vérifie", "resume", "résume", "presente",
-                "présente", "explore", "inspecte", "comprends",
-            )
-            if any(k in mission_lower for k in keywords_analyse):
-                mode = "READ_ONLY"
-            else:
-                mode = "PROPOSE"
+            mode = _detect_mission_mode(mission)
 
             self._post_ui(self._system, f"Mode : {mode}")
+
+            # La CLI Python connue accepte --project.
+            # Pour un executable precompile, conserver MEMOLIBDEV_TARGET
+            # tant que sa compatibilite avec --project n'est pas verifiee.
+            if cli_exe is None:
+                cmd += ["--project", str(project)]
 
             cmd += [
                 "--mission", mission,
