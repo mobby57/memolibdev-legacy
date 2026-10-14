@@ -18,6 +18,15 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import customtkinter as ctk
 
+# --- V2 : assistant conversationnel ---
+try:
+    from assistant_v2 import AssistantV2
+    from codebase_index import CodebaseIndex
+    _V2_AVAILABLE = True
+except Exception as _v2_err:
+    _V2_AVAILABLE = False
+    _V2_IMPORT_ERR = str(_v2_err)
+
 # --- Chemins relatifs (fonctionne dans un .exe PyInstaller) ---
 def _base_dir() -> Path:
     """Dossier contenant les modules Python.
@@ -250,6 +259,24 @@ class MemoLibDevApp(ctk.CTk):
         self.project_path = ctk.StringVar(value="(aucun projet)")
         self.model_var = ctk.StringVar(value=DEFAULT_MODEL)
         self.busy = False
+
+        # --- V2 : initialisation de l'assistant conversationnel ---
+        if _V2_AVAILABLE:
+            try:
+                self._v2_index = CodebaseIndex(Path(".").resolve())
+                self._v2_index.build()
+                self._v2_assistant = AssistantV2(
+                    Path(".").resolve(),
+                    index=self._v2_index,
+                )
+                self._v2_ready = True
+                print("[V2] Assistant conversationnel pret.")
+            except Exception as _e:
+                self._v2_ready = False
+                print(f"[V2] init echouee : {_e}")
+        else:
+            self._v2_ready = False
+            print(f"[V2] modules indisponibles : {_V2_IMPORT_ERR}")
         self.messages = []  # historique pour export
         self._closing = False
         self._ui_events: queue.Queue[tuple[object, tuple]] = queue.Queue()
@@ -415,6 +442,62 @@ class MemoLibDevApp(ctk.CTk):
         self._on_send()
         return "break"
 
+    def v2_chat(self, text: str) -> bool:
+        """Chat V2 avec streaming dans une bulle dediee."""
+        if not getattr(self, "_v2_ready", False):
+            return False
+
+        self._user(text)
+
+        # Bulle assistant vide pour le streaming
+        f = ctk.CTkFrame(self.chat, fg_color="transparent")
+        f.pack(fill="x", padx=20, pady=8)
+        b = ctk.CTkFrame(f, fg_color=CARD, corner_radius=14)
+        b.pack(anchor="w", padx=(0, 20), fill="x")
+
+        header = ctk.CTkFrame(b, fg_color="transparent")
+        header.pack(fill="x", padx=14, pady=(10, 2))
+        ctk.CTkLabel(
+            header, text="MemoLibDev", text_color=ACCENT,
+            font=ctk.CTkFont(size=10, weight="bold"), anchor="w",
+        ).pack(side="left")
+
+        content = ctk.CTkTextbox(
+            b, height=120, wrap="word",
+            fg_color=CARD, text_color=TEXT,
+            border_width=0, font=ctk.CTkFont(size=12),
+        )
+        content.pack(fill="x", expand=True, padx=10, pady=(0, 10))
+        content.insert("1.0", "")
+        content.configure(state="disabled")
+
+        self._stream_box = content
+
+        def on_token(chunk):
+            self.after(0, lambda c=chunk: self._append_stream(c))
+
+        try:
+            response = self._v2_assistant.chat(text, on_token=on_token)
+            self.messages.append(f"[MemoLibDev] {response}")
+            return True
+        except Exception as e:
+            self._system(f"V2 erreur : {e}")
+            return False
+
+    def _append_stream(self, chunk: str):
+        """Ajoute un token a la bulle de streaming."""
+        box = getattr(self, "_stream_box", None)
+        if box is None:
+            return
+        try:
+            box.configure(state="normal")
+            box.insert("end", chunk)
+            box.see("end")
+            box.configure(state="disabled")
+            self.after(10, self._scroll)
+        except Exception:
+            pass
+
     def _on_send(self):
         text = self.entry.get("1.0", "end").strip()
         if not text:
@@ -422,6 +505,14 @@ class MemoLibDevApp(ctk.CTk):
 
         if getattr(self, "_identity_check_pending", False):
             return
+
+
+        # --- V2 : priorite si disponible ---
+        if getattr(self, "_v2_ready", False):
+            self.entry.delete("1.0", "end")
+            if self.v2_chat(text):
+                return
+        # --- sinon, continuer avec la CLI existante ---
 
         proj = self.project_path.get()
         if not proj or proj.startswith("("):

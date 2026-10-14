@@ -10,10 +10,14 @@ from codebase_index import CodebaseIndex
 from tool_use import ToolRegistry, parse_tool_calls, make_standard_tools
 
 
-SYSTEM_PROMPT = """Tu es MemoLibDev, un assistant de code local et securise.
-Tu reponds en francais. Tu ne modifies JAMAIS un fichier sans validation explicite.
-Quand tu veux utiliser un outil, emets :
-<tool_call>{"name": "read_file", "args": {"path": "..."}}</tool_call>"""
+SYSTEM_PROMPT = """Tu es MemoLibDev, un assistant de code local.
+
+REGLES :
+- Reponds TOUJOURS directement en francais, sans demander la permission.
+- Si on te demande d'expliquer du code, fais-le avec ce que tu sais.
+- N'utilise les outils QUE si on te demande explicitement de lire ou modifier un fichier.
+- Ne dis JAMAIS "je vais lire" puis t'arreter. Soit tu le fais, soit tu reponds.
+- Reponds en 2-5 phrases concises."""
 
 
 class AssistantV2:
@@ -22,7 +26,7 @@ class AssistantV2:
     def __init__(
         self,
         project_root: Path,
-        model: str = "qwen2.5-coder",
+        model: str = "memolibdev-qwen7b-16k:latest",
         db_path: Path | None = None,
         index: CodebaseIndex | None = None,
     ):
@@ -33,6 +37,10 @@ class AssistantV2:
         self.index = index
         self.registry = ToolRegistry()
         make_standard_tools(self.project_root, self.registry, index)
+        from tools_file import register_file_tools
+        register_file_tools(self.project_root, self.registry)
+        from tools_shell import register_shell_tools
+        register_shell_tools(self.project_root, self.registry)
 
     def build_prompt(self, user_text: str, max_turns: int = 15) -> str:
         parts = []
@@ -99,3 +107,4 @@ class AssistantV2:
             {"role": t.role, "content": t.content, "time": t.timestamp}
             for t in self.conversation.turns
         ]
+

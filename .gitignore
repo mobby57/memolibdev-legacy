@@ -103,3 +103,4 @@ resultat.txt
 
 # Backups crees par apply_patches.py
 .patch_backups_*/
+.aider*
