@@ -1,0 +1,29 @@
+{
+  "path": "src/lib/auth/nextauth-token.ts",
+  "target": {
+    "git_root": "C:\\Users\\moros\\test_d58_target",
+    "head": "775fda1413cbd6d98946c8d94c4477320511d2e5",
+    "repository_fingerprint": "91a4ceeb72254594"
+  },
+  "evidence_status": "ACCEPTED",
+  "evidence_sha256": "8df10ca2ef6f7cb4b272ec227a926c91e6694a2882b0a444c11f181f372b3e66",
+  "provenance_status": "RESOLVED",
+  "provenance_source_path": "src/lib/auth/nextauth-token.ts",
+  "provenance_resolved_path": "src/lib/auth/nextauth-token.ts",
+  "action": {
+    "action_id": "fixture-action",
+    "action_type": "PROPOSE_CODE_PATCH",
+    "target_path": "src/lib/auth/nextauth-token.ts",
+    "risk": "LOW",
+    "reversibility": "REVERSIBLE_SANDBOX"
+  },
+  "human_approval": {
+    "approved": true,
+    "approver": "fixture",
+    "approved_at": "2026-10-14T00:00:00+00:00",
+    "authority_level": "L3_PROPOSE"
+  },
+  "human_validation_required": true,
+  "status": "AUTHORIZED",
+  "reason": "Cible, evidence ACCEPTED, provenance, scope, action et validation humaine concordent."
+}
