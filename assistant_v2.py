@@ -1,0 +1,101 @@
+"""assistant_v2.py - Orchestrateur V2 (conversation + streaming + tools)."""
+from __future__ import annotations
+import json
+from pathlib import Path
+from typing import Callable, Iterator
+
+from conversation import Conversation
+from streaming import stream_ollama
+from codebase_index import CodebaseIndex
+from tool_use import ToolRegistry, parse_tool_calls, make_standard_tools
+
+
+SYSTEM_PROMPT = """Tu es MemoLibDev, un assistant de code local et securise.
+Tu reponds en francais. Tu ne modifies JAMAIS un fichier sans validation explicite.
+Quand tu veux utiliser un outil, emets :
+<tool_call>{"name": "read_file", "args": {"path": "..."}}</tool_call>"""
+
+
+class AssistantV2:
+    """Assistant conversationnel avec memoire, streaming et outils."""
+
+    def __init__(
+        self,
+        project_root: Path,
+        model: str = "qwen2.5-coder",
+        db_path: Path | None = None,
+        index: CodebaseIndex | None = None,
+    ):
+        self.project_root = Path(project_root).resolve()
+        self.model = model
+        self.db_path = db_path or (self.project_root / "data" / "conv.db")
+        self.conversation = Conversation(self.db_path)
+        self.index = index
+        self.registry = ToolRegistry()
+        make_standard_tools(self.project_root, self.registry, index)
+
+    def build_prompt(self, user_text: str, max_turns: int = 15) -> str:
+        parts = []
+        if self.index:
+            st = self.index.stats()
+            parts.append(
+                f"Projet: {self.project_root} | "
+                f"{st['files']} fichiers, {st['symbols']} symboles indexes."
+            )
+        tools_desc = "\n".join(
+            f"- {t.name}: {t.description}"
+            for t in self.registry.tools.values()
+        )
+        if tools_desc:
+            parts.append(f"Outils disponibles:\n{tools_desc}")
+
+        history = self.conversation.summary_for_context()
+        if history:
+            parts.append(f"Historique recent:\n{history}")
+
+        parts.append(f"Demande actuelle: {user_text}")
+        return "\n\n".join(parts)
+
+    def chat(
+        self,
+        user_text: str,
+        on_token: Callable[[str], None] | None = None,
+    ) -> str:
+        self.conversation.add("user", user_text)
+        prompt = self.build_prompt(user_text)
+
+        full = []
+        if on_token:
+            for chunk in stream_ollama(
+                prompt, model=self.model, system=SYSTEM_PROMPT
+            ):
+                full.append(chunk)
+                on_token(chunk)
+        else:
+            for chunk in stream_ollama(
+                prompt, model=self.model, system=SYSTEM_PROMPT
+            ):
+                full.append(chunk)
+
+        response = "".join(full)
+
+        # Executer les tool calls si presents
+        calls = parse_tool_calls(response)
+        if calls:
+            tool_results = []
+            for name, args in calls:
+                result = self.registry.execute(name, args)
+                tool_results.append(f"[{name}] {result[:1000]}")
+            response += "\n\n--- Resultats outils ---\n" + "\n".join(tool_results)
+
+        self.conversation.add("assistant", response)
+        return response
+
+    def new_conversation(self):
+        self.conversation = Conversation(self.db_path)
+
+    def history(self) -> list[dict]:
+        return [
+            {"role": t.role, "content": t.content, "time": t.timestamp}
+            for t in self.conversation.turns
+        ]

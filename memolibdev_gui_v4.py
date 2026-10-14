@@ -200,19 +200,19 @@ def _collect_process_output(
         returncode=proc.poll(),
     )
 
-ctk.set_appearance_mode("dark")
+ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
-BG = "#0d1117"
-CARD = "#161b22"
-BORDER = "#30363d"
-TEXT = "#e6edf3"
-MUTED = "#8b949e"
-ACCENT = "#58a6ff"
+BG = "#f8f5ed"
+CARD = "#fefcf7"
+BORDER = "#d6d1c4"
+TEXT = "#3a3733"
+MUTED = "#8a8479"
+ACCENT = "#4a6b8a"
 SUCCESS = "#3fb950"
 WARNING = "#d29922"
 ERROR = "#f85149"
-USER = "#1f6feb"
+USER = "#4d6d8a"
 
 
 def check_ollama() -> tuple[bool, str]:
@@ -318,14 +318,14 @@ class MemoLibDevApp(ctk.CTk):
         ctk.CTkButton(header, text="Choisir projet",
                       command=self._choose_project,
                       width=140, height=34,
-                      fg_color=CARD, hover_color="#21262d",
-                      border_width=1, border_color=BORDER).grid(row=0, column=2, padx=(0, 8))
+                      fg_color=CARD, hover_color="#e8e3d5",
+                      border_width=1, border_color=BORDER, text_color=TEXT).grid(row=0, column=2, padx=(0, 8))
 
         ctk.CTkButton(header, text="Sauver log",
                       command=self._save_log,
                       width=100, height=34,
-                      fg_color=CARD, hover_color="#21262d",
-                      border_width=1, border_color=BORDER).grid(row=0, column=3, padx=(0, 16))
+                      fg_color=CARD, hover_color="#e8e3d5",
+                      border_width=1, border_color=BORDER, text_color=TEXT).grid(row=0, column=3, padx=(0, 16))
 
         self.chat = ctk.CTkScrollableFrame(self, fg_color=BG, corner_radius=0)
         self.chat.grid(row=1, column=0, sticky="nsew")
@@ -337,7 +337,7 @@ class MemoLibDevApp(ctk.CTk):
         for label in ["Decrire", "Erreurs", "Documenter", "Tests", "Securite"]:
             ctk.CTkButton(sug, text=label, command=lambda l=label: self._suggest(l),
                           width=100, height=30, fg_color=CARD,
-                          hover_color="#21262d", border_width=1, border_color=BORDER
+                          hover_color="#e8e3d5", border_width=1, border_color=BORDER, text_color=TEXT
                           ).pack(side="left", padx=(0, 6))
 
         inp = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
@@ -352,7 +352,7 @@ class MemoLibDevApp(ctk.CTk):
 
         self.send_btn = ctk.CTkButton(inp, text="Envoyer", command=self._on_send,
                                        width=120, height=50,
-                                       fg_color=ACCENT, hover_color="#79b8ff",
+                                       fg_color=ACCENT, hover_color="#3a5670",
                                        text_color="#0d1117")
         self.send_btn.grid(row=0, column=1, padx=(0, 10), pady=10)
 
@@ -643,7 +643,7 @@ class MemoLibDevApp(ctk.CTk):
                 text="Copier",
                 width=76,
                 height=28,
-                command=lambda value=text: self._copy_text(value),
+                command=lambda value=text: self._copy_text(value), text_color=TEXT
             ).grid(row=0, column=1, padx=(8, 0))
 
             visible_lines = min(text.count("\n") + 1, 18)
