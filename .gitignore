@@ -89,3 +89,17 @@ diagnostic_bootstrap_readonly.py
 mission_bootstrap_read_only.txt
 *_bootstrap_*.txt
 *_report.txt
+
+# Backups locaux de sessions de developpement
+*.backup_*
+*.backup_*_*
+*.backup
+
+# Sauvegardes pre-edition
+*.pre-*.py
+
+# Artefacts de test / scratch
+resultat.txt
+
+# Backups crees par apply_patches.py
+.patch_backups_*/
