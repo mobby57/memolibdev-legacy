@@ -87,16 +87,27 @@ TERMINAL_STATES = {
 # Fichiers du Control Plane — NEVER_ALLOW_AGENT (SPEC §6).
 # L'agent ne peut JAMAIS proposer/appliquer un changement les touchant.
 CONTROL_PLANE_FILES = frozenset({
+    # Autorisation et execution
     "coder_authorization.py",
     "controlled_coder.py",
     "d59_controlled_apply.py",
+    # Perimetre / preuves
     "project_target.py",
     "evidence_resolver_v2_2.py",
     "evidence_resolver_v2.py",
     "import_provenance.py",
     "file_target.py",
     "code_adapter.py",
+    # Orchestration
     "agent_loop.py",
+    "proposal.py",
+    # Surface d'entree (HTTP, UI, CLI)
+    "api_facade.py",
+    "conversation_ui.py",
+    "web_mvp.py",
+    "humanize_ui.py",
+    "memolibdev_gui_v4.py",
+    # Spec
     "SPEC-D6.0.md",
 })
 
