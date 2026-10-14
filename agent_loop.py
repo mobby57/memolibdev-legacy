@@ -502,9 +502,26 @@ class AgentLoop:
                 "(expected_diff_sha256/proposal_id manquant) — nouvelle "
                 "décision humaine liée requise.",
             )
+        # V0.4.2 : la proposition doit exister AVANT toute verification de
+        # binding. Sans proposition, on ne peut pas comparer le proposal_id,
+        # donc on refuse fail-closed (defense en profondeur : le hash du
+        # diff seul ne suffit pas a prouver que c'est la BONNE proposition).
+        if self._proposal is None or not getattr(
+            self._proposal, "proposal_id", None
+        ):
+            self._record(
+                "DIFF_BINDING", LoopState.BLOCK,
+                "proposition absente ou sans proposal_id au moment du binding",
+            )
+            return self._terminate(
+                "BLOCKED",
+                "V0.4.2 binding obligatoire: proposition manquante ou sans "
+                "identite (proposal_id) - nouvelle decision humaine requise.",
+            )
+
         bind_ok, bind_reason = verify_diff_binding(
             m.human_approval, diff,
-            expected_proposal_id=getattr(self._proposal, "proposal_id", None),
+            expected_proposal_id=self._proposal.proposal_id,
         )
         if not bind_ok:
             self._record("DIFF_BINDING", LoopState.BLOCK, bind_reason)
