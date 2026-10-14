@@ -80,6 +80,17 @@ def main() -> int:
     print("=" * 72)
 
     target, report, prop = _real_proposal()
+
+    # Etat de reference du depot AVANT tout test (ne doit pas changer).
+    import subprocess as _sp
+    _memo_porcelain_before = _sp.run(
+        ["git", "-C", str(target.git_root), "status", "--porcelain"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    ).stdout
+    _memo_head_before = _sp.run(
+        ["git", "-C", str(target.git_root), "rev-parse", "HEAD"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    ).stdout.strip()
     ok("P0 proposition réelle AWAIT_HUMAN",
        report.final_state == "AWAIT_HUMAN", report.final_state)
     ok("P0 proposal_id présent", bool(prop.proposal_id), prop.proposal_id)
@@ -286,12 +297,22 @@ def main() -> int:
     ok("11b raison = binding mismatch",
        "binding" in rep2.reason.lower(), rep2.reason[:80])
 
-    # ---- Innocuité MemoLib ----
+    # ---- Innocuité MemoLib : le test n'a provoqué AUCUNE modification ----
     print("\n[MEMOLIB] inchangé")
-    import subprocess
-    st = subprocess.run(["git", "-C", str(target.git_root), "status", "--porcelain"],
-                        text=True, capture_output=True, encoding="utf-8").stdout
-    ok("MEMOLIB working tree propre (aucun apply réel)", st == "", repr(st))
+    _memo_porcelain_after = _sp.run(
+        ["git", "-C", str(target.git_root), "status", "--porcelain"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    ).stdout
+    _memo_head_after = _sp.run(
+        ["git", "-C", str(target.git_root), "rev-parse", "HEAD"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    ).stdout.strip()
+    ok("MEMOLIB working tree inchangé par le test",
+       _memo_porcelain_after == _memo_porcelain_before,
+       f"before={_memo_porcelain_before!r}\nafter={_memo_porcelain_after!r}")
+    ok("MEMOLIB HEAD inchangé (aucun commit créé)",
+       _memo_head_after == _memo_head_before,
+       f"{_memo_head_before[:12]} == {_memo_head_after[:12]}")
 
     print("\n" + "=" * 72)
     print(f"RÉSULTAT V0.4.1 : {len(PASS)} PASS / {len(FAIL)} FAIL")
