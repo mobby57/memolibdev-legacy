@@ -572,7 +572,7 @@ class MemoLibDevApp(ctk.CTk):
         self._spinner_msg = message
 
     def v2_chat(self, text: str) -> bool:
-        """Chat V2 avec etapes visibles + streaming."""
+        """Chat V2 avec etapes visibles + streaming, sans bloquer Tkinter."""
         if not getattr(self, "_v2_ready", False):
             return False
 
@@ -580,7 +580,6 @@ class MemoLibDevApp(ctk.CTk):
         self.send_btn.configure(state="disabled")
         self._show_spinner("Preparation...")
 
-        # Bulle assistant vide pour le streaming
         f = ctk.CTkFrame(self.chat, fg_color="transparent")
         f.pack(fill="x", padx=20, pady=8)
         b = ctk.CTkFrame(f, fg_color=CARD, corner_radius=14)
@@ -593,7 +592,6 @@ class MemoLibDevApp(ctk.CTk):
             font=ctk.CTkFont(size=10, weight="bold"), anchor="w",
         ).pack(side="left")
 
-        # Petit label "recherche en cours..."
         progress_lbl = ctk.CTkLabel(
             b, text="Recherche...", text_color=MUTED,
             font=ctk.CTkFont(size=10, slant="italic"), anchor="w",
@@ -615,29 +613,72 @@ class MemoLibDevApp(ctk.CTk):
         def on_token(chunk):
             if not self._stream_started:
                 self._stream_started = True
-                def _update_progress(lbl=progress_lbl):
-                    try:
-                        if lbl.winfo_exists():
-                            lbl.configure(text="Redaction...")
-                    except Exception:
-                        pass
-                self.after(0, _update_progress)
-                self.after(0, lambda: self._update_spinner("Redaction de la reponse..."))
-            self.after(0, lambda c=chunk: self._append_stream(c))
+                self._post_ui(self._v2_set_progress, progress_lbl, "Redaction...")
+                self._post_ui(self._update_spinner, "Redaction de la reponse...")
+            self._post_ui(self._append_stream, chunk)
 
+        def on_event(event):
+            self._post_ui(self._show_tool_event, event)
+
+        def worker():
+            try:
+                response = self._v2_assistant.chat_with_tools(
+                    text, on_token=on_token, on_event=on_event
+                )
+                self._post_ui(self._v2_done_ok, response, progress_lbl)
+            except Exception as e:
+                self._post_ui(self._v2_done_err, str(e), progress_lbl)
+
+        threading.Thread(
+            target=worker, daemon=True, name="MemoLibDev-V2Chat"
+        ).start()
+        return True
+
+    def _show_tool_event(self, event):
+        """Affiche un evenement d'outil dans le chat (bulle systeme)."""
         try:
-            response = self._v2_assistant.chat_with_tools(text, on_token=on_token)
-            self.messages.append(f"[MemoLibDev] {response}")
+            kind = event.get("kind")
+            if kind == "tool_call":
+                name = event.get("name", "?")
+                args = event.get("args", {})
+                arg_repr = ", ".join(
+                    f"{k}={v}" for k, v in list(args.items())[:2]
+                )
+                txt = f"\u2699 {name}({arg_repr})"
+                self._system(txt)
+            elif kind == "tool_result":
+                name = event.get("name", "?")
+                ok = event.get("ok", False)
+                mark = "\u2713" if ok else "\u2717"
+                summary = (event.get("summary") or "")[:120]
+                self._system(f"{mark} {name} \u2192 {summary}")
+        except Exception:
+            pass
+
+    def _v2_set_progress(self, lbl, text):
+        try:
+            if lbl.winfo_exists():
+                lbl.configure(text=text)
+        except Exception:
+            pass
+
+    def _v2_done_ok(self, response, progress_lbl):
+        self.messages.append(f"[MemoLibDev] {response}")
+        try:
             progress_lbl.destroy()
-            self._stop_spinner("Pret.")
-            self.send_btn.configure(state="normal")
-            return True
-        except Exception as e:
-            self._system(f"V2 erreur : {e}")
+        except Exception:
+            pass
+        self._stop_spinner("Pret.")
+        self.send_btn.configure(state="normal")
+
+    def _v2_done_err(self, err, progress_lbl):
+        self._system(f"V2 erreur : {err}")
+        try:
             progress_lbl.destroy()
-            self._stop_spinner("Erreur.")
-            self.send_btn.configure(state="normal")
-            return False
+        except Exception:
+            pass
+        self._stop_spinner("Erreur.")
+        self.send_btn.configure(state="normal")
 
     def _append_stream(self, chunk: str):
         """Ajoute un token a la bulle de streaming."""

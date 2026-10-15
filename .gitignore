@@ -104,3 +104,32 @@ resultat.txt
 # Backups crees par apply_patches.py
 .patch_backups_*/
 .aider*
+
+# Backups automatiques des patchs MemoLibDev
+*.pre_*
+*.before-*
+*.backup-*
+*.backup_*
+*.bak
+
+# Coder mode
+.coder_backups/
+.coder_log.txt
+
+# Dumps de diagnostic
+audit_dump.txt
+gui_dump.txt
+_test_middleware_dump.txt
+
+# Logs de session
+memolibdev_log_*.txt
+
+# Injection tests
+_test_injection/
+
+# Environnement
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
