@@ -53,6 +53,25 @@ REGLES :
 - Reponds en 2-5 phrases concises."""
 
 
+def _load_steering_files(project_root: Path) -> list[tuple[str, str]]:
+    """Charge les fichiers .memolib/steering/*.md du projet.
+
+    Retourne [(nom, contenu), ...] tries alphabetiquement.
+    Fichiers absents ou vides : ignores silencieusement.
+    """
+    steering_dir = Path(project_root) / ".memolib" / "steering"
+    if not steering_dir.is_dir():
+        return []
+    result: list[tuple[str, str]] = []
+    for path in sorted(steering_dir.glob("*.md")):
+        try:
+            content = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if content:
+            result.append((path.name, content))
+    return result
+
 class AssistantV2:
     """Assistant conversationnel avec memoire, streaming et outils."""
 
@@ -128,6 +147,13 @@ class AssistantV2:
 
     def build_prompt(self, user_text: str, max_turns: int = 15) -> str:
         parts = []
+        # Steering files (.memolib/steering/*.md) : regles projet.
+        _steering = _load_steering_files(self.project_root)
+        if _steering:
+            parts.append("=== REGLES PROJET (.memolib/steering) ===")
+            for _name, _content in _steering:
+                parts.append(f"--- {_name} ---")
+                parts.append(_content)
         parts.append(f"Projet: {self.project_root}")
         parts.append(
             "Outils disponibles : read_file, list_files, find_symbol, "
