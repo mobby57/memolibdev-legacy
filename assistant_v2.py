@@ -97,39 +97,34 @@ class AssistantV2:
             )
         self.conversation = Conversation(self.db_path)
         self.index = index
-        self.registry = ToolRegistry()
-        make_standard_tools(self.project_root, self.registry, index)
-        import tool_use as _tu
-        from tools_file import register_file_tools
         self.coder_mode = os.environ.get(
             "MEMOLIBDEV_CODER", ""
         ).strip() in ("1", "true", "True", "yes")
+        # Allowlist par instance : plus de mutation du global
+        # tool_use.ALLOWED_TOOL_NAMES (évite la contamination inter-instances).
+        import tool_use as _tu
+        allowed = _tu.READ_ONLY_TOOL_NAMES
         if self.coder_mode:
-            _tu.ALLOWED_TOOL_NAMES = (
-                _tu.READ_ONLY_TOOL_NAMES | _tu.WRITE_TOOL_NAMES
+            allowed = (
+                allowed | _tu.WRITE_TOOL_NAMES | _tu.CODER_EXTRA_TOOL_NAMES
             )
+        self.registry = ToolRegistry(allowed=allowed)
+        make_standard_tools(self.project_root, self.registry, index)
+        from tools_file import register_file_tools
         register_file_tools(
             self.project_root, self.registry,
             coder_mode=self.coder_mode,
         )
         from tools_verify import register_verify_tools
-        if self.coder_mode:
-            _tu.ALLOWED_TOOL_NAMES = (
-                _tu.ALLOWED_TOOL_NAMES | _tu.CODER_EXTRA_TOOL_NAMES
-            )
         register_verify_tools(self.project_root, self.registry)
         from tools_run import register_run_tools
         register_run_tools(
             self.project_root, self.registry,
             coder_mode=self.coder_mode,
         )
-        from tools_run import register_run_tools
-        register_run_tools(
-            self.project_root, self.registry,
-            coder_mode=self.coder_mode,
-        )
-        from tools_shell import register_shell_tools
-        register_shell_tools(self.project_root, self.registry)
+        # NOTE: tools_shell n'est plus enregistré ici. Il enregistrait un
+        # 'run_command' concurrent qui écrasait celui de tools_run (whitelist
+        # morte). Le module reste disponible pour des tests isolés.
 
     def build_prompt(self, user_text: str, max_turns: int = 15) -> str:
         parts = []
@@ -204,7 +199,14 @@ class AssistantV2:
                                   "args": args if isinstance(args, dict) else {}})
                     except Exception:
                         pass
-                res = self.registry.execute(name, args)
+                # DIRECT_MUTATION_GUARD_MEMOLIBDEV
+                if name in {"write_file", "edit_file", "delete_file", "run_command"}:
+                    res = (
+                        "BLOQUE : outil a effet de bord interdit dans ce chemin direct. "
+                        "Utiliser le circuit de modification controlee et d'approbation humaine."
+                    )
+                else:
+                    res = self.registry.execute(name, args)
                 res_str = str(res)
                 if on_event:
                     try:
@@ -314,7 +316,14 @@ class AssistantV2:
         if calls:
             tool_results = []
             for name, args in calls:
-                result = self.registry.execute(name, args)
+                # DIRECT_MUTATION_GUARD_MEMOLIBDEV
+                if name in {"write_file", "edit_file", "delete_file", "run_command"}:
+                    result = (
+                        "BLOQUE : outil a effet de bord interdit dans ce chemin direct. "
+                        "Utiliser le circuit de modification controlee et d'approbation humaine."
+                    )
+                else:
+                    result = self.registry.execute(name, args)
                 tool_results.append(f"[{name}] {result[:1000]}")
             response += "\n\n--- Resultats outils ---\n" + "\n".join(tool_results)
 
