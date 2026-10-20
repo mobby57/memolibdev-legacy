@@ -62,9 +62,9 @@ def main() -> int:
         print("\n[T] tool_use")
         reg = ToolRegistry()
         reg.register(Tool("echo", "echo", {"type": "object"}, lambda msg: msg))
-        ok("T1 execute", reg.execute("echo", {"msg": "hi"}) == "hi")
-        ok("T2 unknown", "inconnu" in reg.execute("nope", {}))
-        ok("T3 schemas", len(reg.schemas()) == 1)
+        ok("T1 execute blocked", "BLOQUE" in reg.execute("echo", {"msg": "hi"}))
+        ok("T2 unknown blocked", "BLOQUE" in reg.execute("nope", {}))
+        ok("T3 schemas", len(reg.schemas()) == 0)
 
         print("\n[TC] parse_tool_calls")
         text = 'bla <tool_call>{"name": "read_file", "args": {"path": "a.py"}}</tool_call>'

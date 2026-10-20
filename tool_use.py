@@ -14,7 +14,9 @@ WRITE_TOOL_NAMES = frozenset({
     "write_file", "edit_file", "delete_file",
 })
 CODER_EXTRA_TOOL_NAMES = frozenset({"verify_file", "run_command"})
-ALLOWED_TOOL_NAMES = READ_ONLY_TOOL_NAMES  # mutable en mode coder
+# Allowlist par défaut (rétro-compat). NE PLUS MUTER depuis d'autres modules :
+# passer `allowed=` au constructeur de ToolRegistry.
+ALLOWED_TOOL_NAMES = READ_ONLY_TOOL_NAMES
 
 
 @dataclass
@@ -28,8 +30,9 @@ class Tool:
 class ToolRegistry:
     """Registre d'outils avec parsing JSON."""
 
-    def __init__(self):
+    def __init__(self, allowed: frozenset[str] | None = None):
         self.tools: dict[str, Tool] = {}
+        self.allowed = allowed if allowed is not None else ALLOWED_TOOL_NAMES
 
     def register(self, tool: Tool):
         self.tools[tool.name] = tool
@@ -44,11 +47,20 @@ class ToolRegistry:
                           "description": t.description,
                           "parameters": t.schema}}
             for t in self.tools.values()
-            if t.name in ALLOWED_TOOL_NAMES
+            if t.name in self.allowed
+            and t.name not in WRITE_TOOL_NAMES
         ]
 
     def execute(self, name: str, args: dict) -> str:
-        if name not in ALLOWED_TOOL_NAMES:
+        # Garde inconditionnelle : les effets de bord ne passent JAMAIS
+        # par execute(). Les écritures passent par agent_loop -> D5.9.
+        # coder_mode élargit self.allowed mais ne lève pas ce blocage.
+        if name in WRITE_TOOL_NAMES or name == "run_command":
+            return (
+                f"BLOQUE: écriture directe interdite pour {name}. "
+                "Utilisez le circuit d'approbation supervisée de la CLI."
+            )
+        if name not in self.allowed:
             return f"BLOQUE: outil {name} interdit dans le registre direct."
         if not isinstance(args, dict):
             return "ERREUR: arguments invalides"

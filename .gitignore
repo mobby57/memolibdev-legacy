@@ -1,5 +1,5 @@
 # ============================================================
-# MemoLibDev v3 — Git Ignore
+# MemoLibDev v3 Ã¢â‚¬â€ Git Ignore
 # ============================================================
 
 # Python
@@ -17,10 +17,10 @@ env/
 .env.*
 !.env.example
 
-# Runtime / données locales
+# Runtime / donnÃƒÂ©es locales
 workspace/
 
-# Rapports générés
+# Rapports gÃƒÂ©nÃƒÂ©rÃƒÂ©s
 reports/
 
 # Backups temporaires / historiques locaux
@@ -33,7 +33,7 @@ reports/
 *.temp
 *.bak
 
-# OS / éditeurs
+# OS / ÃƒÂ©diteurs
 .DS_Store
 Thumbs.db
 .vscode/
@@ -133,3 +133,7 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+*.bak-*
+_archive/
+data/
+/*.ps1
