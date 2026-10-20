@@ -580,6 +580,27 @@ class AgentLoop:
                 )
             self._record("CONTEXT_RECHECK", LoopState.CONTINUE, "CONTEXT_FRESH")
 
+        # ----- 4.8quater HOOKS pre_task (fail-closed) -----
+        from hook_runner import run_hooks as _run_hooks
+        _hook_ctx = {"diff": diff, "target": str(m.target.git_root)}
+        _hook_dir = m.target.git_root / ".memolib" / "hooks"
+        _pre_ok, _pre_reason = _run_hooks("pre_task", _hook_dir, _hook_ctx)
+        if not _pre_ok:
+            self._record("HOOK_PRE", LoopState.BLOCK, _pre_reason)
+            return self._terminate("BLOCKED", f"pre_task hook: {_pre_reason}")
+        self._record("HOOK_PRE", LoopState.CONTINUE, _pre_reason)
+
+        # Composite verify : self.verify + post_task hooks.
+        # D5.9 rollback automatiquement si l'un ou l'autre echoue.
+        def _composite_verify(repo_root):
+            v_ok, v_reason = self.verify(repo_root)
+            if not v_ok:
+                return False, v_reason
+            h_ok, h_reason = _run_hooks("post_task", _hook_dir, _hook_ctx)
+            if not h_ok:
+                return False, f"post_task hook: {h_reason}"
+            return True, f"{v_reason} + post_task hooks OK"
+
         # ----- 4.9 D5.9 APPLY (L6) + 4.10 VERIFY léger -----
         # D5.9 est le SEUL à écrire. Il refait pre_apply (target binding +
         # evidence SHA + scope + git apply --check) -> snapshot -> apply ->
@@ -598,7 +619,7 @@ class AgentLoop:
             diff,
             target_head=m.target.head_full,
             target_fingerprint=m.target.fingerprint,
-            verify=self.verify,          # VERIFY léger fourni par l'appelant
+            verify=_composite_verify,
         )
 
         # Invariant 6 : jamais commit/push/production. D5.9 le garantit ;

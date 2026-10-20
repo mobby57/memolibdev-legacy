@@ -69,6 +69,7 @@ def chat_once(
     host: str = "http://127.0.0.1:11434",
     timeout: int = 180,
     temperature: float = 0.2,
+    num_predict: int | None = None,
 ) -> dict:
     """Appel /api/chat (non-streaming) avec tools natifs Ollama."""
     payload: dict = {
@@ -79,6 +80,8 @@ def chat_once(
     }
     if tools:
         payload["tools"] = tools
+    if num_predict is not None:
+        payload["options"]["num_predict"] = int(num_predict)
 
     req = Request(
         f"{host}/api/chat",
@@ -108,7 +111,7 @@ def chat_once(
             "role": "assistant",
             "content": f"[ERREUR /api/chat HTTP {e.code}] {body}",
         }
-    except URLError as e:
+    except (URLError, TimeoutError, ConnectionError) as e:
         return {"role": "assistant", "content": f"[ERREUR /api/chat : {e}]"}
 
 
