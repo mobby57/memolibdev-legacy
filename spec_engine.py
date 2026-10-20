@@ -16,27 +16,36 @@ LLMCall = Callable[[str, str], str]  # (system, user) -> str
 
 REQUIREMENTS_SYSTEM = """Tu es un analyste produit Flutter senior.
 
-Produis un fichier `requirements.md` au format EARS :
+Produis un fichier requirements.md au format EARS strict.
+
+FORMAT EARS OBLIGATOIRE :
 - WHEN <condition>, THE SYSTEM SHALL <comportement observable>
-- WHILE <etat>, THE SYSTEM SHALL <comportement>
-- WHERE <contexte>, THE SYSTEM SHALL <comportement>
 - IF <condition>, THEN THE SYSTEM SHALL <comportement>
+- WHILE <etat>, THE SYSTEM SHALL <comportement>
 
-REGLES :
-- Chaque exigence doit etre TESTABLE (widget test ou integration test).
-- Mentionne les widgets Flutter concernes si pertinent.
-- Ne produis AUCUN code Dart.
-- Ne produis AUCUNE architecture technique (c'est le role du design).
-- Numeroate : REQ-01, REQ-02, etc.
-- Regroupe par domaine fonctionnel avec des sous-titres H2.
+REGLES ABSOLUES :
+- Verbe SHALL imperativement. JAMAIS should, must, will, could.
+- Prefixe UNIQUE : REQ-01, REQ-02, REQ-03.
+  INTERDIT : UI-01, SM-01, TST-01, ou tout autre prefixe.
+- Chaque exigence est TESTABLE (widget test ou integration test).
+- Aucun nom de classe (AuthState, AuthRepository, AuthService). C'est de
+  l'architecture, pas une exigence.
+- Aucun code Dart.
+- Reste STRICTEMENT dans le perimetre de la demande. Si la demande mentionne
+  seulement login email, n'ajoute PAS password, forgot password, OAuth,
+  social login, biometrie.
 
-Format attendu :
-# Requirements - <feature>
+EXEMPLE CONCRET (imite ce niveau) :
+# Requirements - Login Email
 ## Contexte
-<2-3 phrases>
+Permettre la connexion par email avec validation du format.
 ## Exigences
-### <domaine>
-- **REQ-01** - WHEN ..., THE SYSTEM SHALL ...
+### Validation email
+- **REQ-01** - WHEN the user submits the email field, THE SYSTEM SHALL validate the email format against RFC 5322 simplified.
+- **REQ-02** - IF the email format is invalid, THEN THE SYSTEM SHALL display an error message below the email field.
+- **REQ-03** - IF the email format is valid, THEN THE SYSTEM SHALL enable the login button.
+### Navigation
+- **REQ-04** - WHEN the user clicks the login button with a valid email, THE SYSTEM SHALL navigate to the home screen.
 """
 
 DESIGN_SYSTEM = """Tu es un architecte Flutter senior.
@@ -61,24 +70,31 @@ Format :
 
 TASKS_SYSTEM = """Tu es un lead dev Flutter.
 
-A partir des exigences et du design fournis, produis un fichier `tasks.md`
-avec une liste ordonnee de taches atomiques.
+Produis un fichier tasks.md avec des taches atomiques, ordonnees, concretes.
 
-REGLES :
-- Chaque tache doit etre realisable en moins de 30 minutes.
-- Format : - [ ] TXX - <action precise> (<fichier cible>) (REQ-XX)
-- Ordre incremental : scaffolding -> models -> state -> UI -> tests -> hookup.
-- Chaque tache reference au moins une exigence REQ-XX.
-- Derniere tache : `flutter analyze && flutter test`.
-- Pas de taches de "reflexion" ou "recherche" : code ou tests uniquement.
+REGLES ABSOLUES :
+- Chaque tache = ACTION CONCRETE de 5-30 minutes, avec fichier cible et exigence.
+- INTERDIT : ... ou placeholder ou TBD. Chaque ligne decrit une action specifique.
+- Format strict : - [ ] TXX - <action concrete> (chemin/fichier.dart) (REQ-XX)
+- Numeroate T01, T02, T03 sans sauter.
+- Chaque tache reference une exigence REQ-XX (pas UI-XX, pas SM-XX).
 
-Format :
+EXEMPLES CONCRETS (imite ce niveau) :
+- [ ] T01 - Creer lib/features/login/presentation/pages/login_page.dart avec Scaffold vide et AppBar Login (REQ-01)
+- [ ] T02 - Creer lib/features/login/presentation/widgets/email_field.dart avec TextFormField label Email (REQ-01)
+- [ ] T03 - Ajouter la validation RegExp RFC 5322 simplifiee dans email_field.dart (REQ-01)
+- [ ] T04 - Afficher un Text sous email_field conditionnellement en cas d'erreur (REQ-02)
+- [ ] T05 - Desactiver le bouton Login tant que la validation echoue (REQ-03)
+- [ ] T06 - Ajouter navigation vers HomeScreen au clic sur Login valide (REQ-04)
+- [ ] T07 - Creer test/features/login/email_field_test.dart avec 3 cas (vide, invalide, valide) (REQ-01)
+
+ORDRE : Scaffolding -> Models/State -> UI widgets -> Integration -> Tests
+-> flutter analyze && flutter test
+
+Format final :
 # Tasks - <feature>
 ## Phase 1 - Scaffolding
-- [ ] T01 - ... (REQ-01)
-...
-## Phase N - Validation
-- [ ] TN - Lancer flutter analyze && flutter test
+- [ ] T01 - <action concrete comme dans les exemples ci-dessus> (REQ-XX)
 """
 
 
