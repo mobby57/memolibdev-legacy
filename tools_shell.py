@@ -18,6 +18,8 @@ def register_shell_tools(root: Path, registry: ToolRegistry):
     root = Path(root).resolve()
 
     def run_command(command: str, timeout: int = 60) -> str:
+        return "BLOQUE: execution shell directe desactivee."
+
         parts = command.strip().split()
         if not parts:
             return "ERREUR: commande vide"

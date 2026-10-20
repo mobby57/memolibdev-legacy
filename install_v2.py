@@ -677,44 +677,7 @@ FILES = {
 
 
 def install():
-    print("=" * 72)
-    print("INSTALL V2 - 4 modules + tests")
-    print("=" * 72)
-    print(f"Dossier : {ROOT}")
-    print()
-
-    bk = ROOT / f".patch_backups_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    created, skipped = [], []
-    for name, content in FILES.items():
-        p = ROOT / name
-        if p.exists():
-            skipped.append(name)
-            print(f"[SKIP] {name} existe deja")
-            continue
-        p.write_text(content, encoding="utf-8")
-        created.append(name)
-        print(f"[OK]   {name} cree")
-
-    print()
-    print(f"Crees : {len(created)}  Skippes : {len(skipped)}")
-    print()
-    print("Test de la nouvelle chaine :")
-    print("  python test_integration_v2.py")
-    print()
-    print("Integration GUI (optionnel) :")
-    print("  1. Dans memolibdev_gui_v4.py, ajouter en haut :")
-    print("       from assistant_v2 import AssistantV2")
-    print("       from codebase_index import CodebaseIndex")
-    print("  2. Dans __init__ de MemoLibDevApp :")
-    print("       self.index = CodebaseIndex(Path('.'))")
-    print("       self.index.build()")
-    print("       self.assistant = AssistantV2(Path('.'), index=self.index)")
-    print("  3. Dans _on_send, remplacer l'appel CLI par :")
-    print("       def on_token(chunk):")
-    print("           self.after(0, lambda: self._append_stream(chunk))")
-    print("       self.assistant.chat(text, on_token=on_token)")
-    return 0
+    return 'BLOQUE: install_v2.py désactivé pour éviter la restauration de modèles non sécurisés.'
 
 
 if __name__ == "__main__":

@@ -202,136 +202,14 @@ Explique brievement ce que tu fais entre chaque appel."""'''
 
 
 def patch_assistant():
-    path = ROOT / "assistant_v2.py"
-    if not path.exists():
-        return "absent"
-    src = path.read_text(encoding="utf-8")
-
-    # A) Enregistrement des nouveaux outils
-    anchor = "make_standard_tools(self.project_root, self.registry, index)"
-    if "register_file_tools" in src:
-        result_a = "deja"
-    elif anchor in src:
-        new_line = (
-            anchor
-            + "\n        from tools_file import register_file_tools"
-            + "\n        register_file_tools(self.project_root, self.registry)"
-            + "\n        from tools_shell import register_shell_tools"
-            + "\n        register_shell_tools(self.project_root, self.registry)"
-        )
-        src = src.replace(anchor, new_line, 1)
-        result_a = "ok"
-    else:
-        result_a = "ancre introuvable"
-
-    # B) Nouveau SYSTEM_PROMPT
-    if "run_command(command) : executer" in src:
-        result_b = "deja"
-    else:
-        pat = re.compile(
-            r'SYSTEM_PROMPT\s*=\s*""".*?"""',
-            re.DOTALL,
-        )
-        new_src, n = pat.subn(NEW_SYSTEM_PROMPT, src, count=1)
-        if n == 0:
-            result_b = "SYSTEM_PROMPT introuvable"
-        else:
-            src = new_src
-            result_b = "ok"
-
-    # Verif syntaxe avant ecriture
-    try:
-        ast.parse(src)
-    except SyntaxError as e:
-        return f"erreur syntaxe ligne {e.lineno}: {e.msg}"
-
-    shutil.copy2(path, BK / path.name)
-    path.write_text(src, encoding="utf-8")
-    return f"tools={result_a}, prompt={result_b}"
+    return 'BLOQUE: installateur historique désactivé; aucune modification appliquée.'
 
 
 # =====================================================================
 # Main
 # =====================================================================
 def main():
-    log("=" * 72)
-    log("INSTALL TOOLS - outils de developpement pour MemoLibDev")
-    log("=" * 72)
-    log(f"Dossier : {ROOT}")
-    log()
-
-    BK.mkdir(exist_ok=True)
-    log(f"Backups : {BK.name}/")
-    log()
-
-    # [1] tools_file.py
-    log("[1/4] tools_file.py...")
-    p1 = ROOT / "tools_file.py"
-    if p1.exists():
-        log("  -> deja present, skip")
-    else:
-        p1.write_text(TOOLS_FILE, encoding="utf-8")
-        log("  -> cree")
-
-    # [2] tools_shell.py
-    log("[2/4] tools_shell.py...")
-    p2 = ROOT / "tools_shell.py"
-    if p2.exists():
-        log("  -> deja present, skip")
-    else:
-        p2.write_text(TOOLS_SHELL, encoding="utf-8")
-        log("  -> cree")
-
-    # [3] Patch assistant_v2.py
-    log("[3/4] Patch assistant_v2.py...")
-    result = patch_assistant()
-    log(f"  -> {result}")
-
-    # [4] Verification syntaxique
-    log("[4/4] Verification syntaxique...")
-    files = ["tools_file.py", "tools_shell.py", "assistant_v2.py"]
-    all_ok = True
-    for name in files:
-        p = ROOT / name
-        if not p.exists():
-            log(f"  [{name}] ABSENT")
-            all_ok = False
-            continue
-        try:
-            ast.parse(p.read_text(encoding="utf-8"))
-            log(f"  [{name}] OK")
-        except SyntaxError as e:
-            log(f"  [{name}] ERREUR ligne {e.lineno}: {e.msg}")
-            all_ok = False
-
-    log()
-    if all_ok:
-        log("=" * 72)
-        log("INSTALLATION REUSSIE")
-        log("=" * 72)
-        log()
-        log("Test rapide :")
-        log("  python -c \"from tools_file import register_file_tools; "
-            "from tools_shell import register_shell_tools; print('OK')\"")
-        log()
-        log("Puis relancez la GUI :")
-        log("  python .\\memolibdev_gui_v4.py")
-        log()
-        log("Nouveaux outils disponibles pour l'IA :")
-        log("  - write_file(path, content)")
-        log("  - edit_file(path, old, new)")
-        log("  - delete_file(path)")
-        log("  - run_command(command, timeout)")
-        log()
-        log("Test dans la GUI (exemples) :")
-        log("  'Cree un fichier TEST.md avec Hello World'")
-        log("  'Lis src/app/page.tsx et dis-moi ce qu'il fait'")
-        log("  'Lance npm test et resume les resultats'")
-    else:
-        log("ERREUR : des fichiers ont une syntaxe cassee.")
-        log(f"Restaurez depuis {BK.name}/")
-        return 1
-    return 0
+    return "BLOQUE: install_tools.py désactivé pour éviter la réactivation d'outils permissifs."
 
 
 if __name__ == "__main__":
