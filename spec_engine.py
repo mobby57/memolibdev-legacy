@@ -91,6 +91,21 @@ class SpecResult:
     tasks_path: Path
 
 
+def _load_steering(project_root: Path) -> str:
+    """Charge .memolib/steering/*.md, concatenes pour injection dans les prompts."""
+    steering_dir = Path(project_root) / ".memolib" / "steering"
+    if not steering_dir.is_dir():
+        return ""
+    parts: list[str] = []
+    for path in sorted(steering_dir.glob("*.md")):
+        try:
+            content = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if content:
+            parts.append(f"=== {path.name} ===\n{content}")
+    return "\n\n".join(parts)
+
 def _slug(prompt: str, max_words: int = 5) -> str:
     words = [w for w in prompt.lower().split() if w.isalnum()][:max_words]
     return "-".join(words) if words else "spec"
@@ -102,21 +117,33 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def generate_requirements(prompt: str, llm_call: LLMCall) -> str:
-    return llm_call(REQUIREMENTS_SYSTEM, prompt)
+def generate_requirements(prompt: str, llm_call: LLMCall,
+                          steering: str = "") -> str:
+    user = prompt
+    if steering:
+        user = f"REGLES PROJET (a respecter) :\n{steering}\n\n---\n\n{prompt}"
+    return llm_call(REQUIREMENTS_SYSTEM, user)
 
 
-def generate_design(prompt: str, requirements: str, llm_call: LLMCall) -> str:
+def generate_design(prompt: str, requirements: str, llm_call: LLMCall,
+                    steering: str = "") -> str:
     user = f"Demande initiale :\n{prompt}\n\nExigences produites :\n{requirements}"
+    if steering:
+        user = f"REGLES PROJET (a respecter) :\n{steering}\n\n---\n\n{user}"
     return llm_call(DESIGN_SYSTEM, user)
 
 
 def generate_tasks(prompt: str, requirements: str, design: str,
-                   llm_call: LLMCall) -> str:
+                   llm_call: LLMCall, steering: str = "") -> str:
+    prefix = (
+        f"REGLES PROJET (a respecter) :\n{steering}\n\n---\n\n"
+        if steering else ""
+    )
     user = (
-        f"Demande :\n{prompt}\n\n"
-        f"Exigences :\n{requirements}\n\n"
-        f"Design :\n{design}"
+        prefix
+        + f"Demande :\n{prompt}\n\n"
+        + f"Exigences :\n{requirements}\n\n"
+        + f"Design :\n{design}"
     )
     return llm_call(TASKS_SYSTEM, user)
 
@@ -139,15 +166,19 @@ def generate_spec(
     spec_dir = Path(project_root) / ".memolib" / "specs" / slug
     spec_dir.mkdir(parents=True, exist_ok=True)
 
-    req_text = generate_requirements(prompt, llm_call)
+    steering = _load_steering(project_root)
+
+    req_text = generate_requirements(prompt, llm_call, steering=steering)
     req_path = spec_dir / "requirements.md"
     _write(req_path, req_text)
 
-    design_text = generate_design(prompt, req_text, llm_call)
+    design_text = generate_design(prompt, req_text, llm_call, steering=steering)
     design_path = spec_dir / "design.md"
     _write(design_path, design_text)
 
-    tasks_text = generate_tasks(prompt, req_text, design_text, llm_call)
+    tasks_text = generate_tasks(
+        prompt, req_text, design_text, llm_call, steering=steering,
+    )
     tasks_path = spec_dir / "tasks.md"
     _write(tasks_path, tasks_text)
 
