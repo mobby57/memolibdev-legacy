@@ -19,7 +19,9 @@ WHITELIST = (
     ("npx", "tsc"),
     ("npx", "playwright"),
     ("npm", "test"),
-    ("npm", "run"),
+    # ("npm", "run") retire : permettrait "npm run <script arbitraire>"
+    # lu depuis package.json. Non atteignable tant que execute():52 bloque
+    # run_command, mais defense en profondeur.
     ("npm", "ls"),
     ("git", "status"),
     ("git", "diff"),

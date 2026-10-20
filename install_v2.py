@@ -666,15 +666,8 @@ if __name__ == "__main__":
 # ======================================================================
 # INSTALLATION
 # ======================================================================
-FILES = {
-    "conversation.py": CONVERSATION_PY,
-    "streaming.py": STREAMING_PY,
-    "codebase_index.py": CODEBASE_INDEX_PY,
-    "tool_use.py": TOOL_USE_PY,
-    "assistant_v2.py": ASSISTANT_V2_PY,
-    "test_integration_v2.py": TEST_INTEGRATION_V2_PY,
-}
-
+# FILES = {...} supprime : install() est neutralisee, les templates
+# ne sont plus references. Voir commit "chore: preserve pre-audit...".
 
 def install():
     return 'BLOQUE: install_v2.py désactivé pour éviter la restauration de modèles non sécurisés.'
