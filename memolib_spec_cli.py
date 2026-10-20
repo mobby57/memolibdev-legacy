@@ -21,6 +21,7 @@ from streaming import chat_once
 def make_llm_call(
     model: str, host: str,
     temperature: float = 0.2, timeout: int = 600,
+    num_predict: int | None = 4096,
 ) -> LLMCall:
     """Adaptateur chat_once -> LLMCall(system, user) -> str.
 
@@ -40,6 +41,7 @@ def make_llm_call(
             host=host,
             temperature=temperature,
             timeout=timeout,
+            num_predict=num_predict,
         )
         content = (result or {}).get("content", "")
         if not isinstance(content, str) or not content.strip():
@@ -68,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="Timeout par appel LLM en secondes (defaut: 600)")
     args = ap.parse_args(argv)
 
-    llm = make_llm_call(args.model, args.host, args.temperature, args.timeout)
+    llm = make_llm_call(args.model, args.host, args.temperature, args.timeout, 4096)
     try:
         result = generate_spec(
             Path(args.root), args.prompt, llm, slug=args.slug,
