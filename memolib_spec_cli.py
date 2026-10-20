@@ -18,7 +18,10 @@ from spec_engine import generate_spec, LLMCall
 from streaming import chat_once
 
 
-def make_llm_call(model: str, host: str, temperature: float = 0.2) -> LLMCall:
+def make_llm_call(
+    model: str, host: str,
+    temperature: float = 0.2, timeout: int = 600,
+) -> LLMCall:
     """Adaptateur chat_once -> LLMCall(system, user) -> str.
 
     chat_once renvoie un dict {'role': ..., 'content': ...} et NE raise PAS
@@ -36,6 +39,7 @@ def make_llm_call(model: str, host: str, temperature: float = 0.2) -> LLMCall:
             model=model,
             host=host,
             temperature=temperature,
+            timeout=timeout,
         )
         content = (result or {}).get("content", "")
         if not isinstance(content, str) or not content.strip():
@@ -60,9 +64,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--slug", default=None,
                     help="Slug du dossier de spec (defaut: derive du prompt)")
     ap.add_argument("--temperature", type=float, default=0.2)
+    ap.add_argument("--timeout", type=int, default=600,
+                    help="Timeout par appel LLM en secondes (defaut: 600)")
     args = ap.parse_args(argv)
 
-    llm = make_llm_call(args.model, args.host, args.temperature)
+    llm = make_llm_call(args.model, args.host, args.temperature, args.timeout)
     try:
         result = generate_spec(
             Path(args.root), args.prompt, llm, slug=args.slug,

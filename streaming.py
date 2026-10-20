@@ -108,7 +108,7 @@ def chat_once(
             "role": "assistant",
             "content": f"[ERREUR /api/chat HTTP {e.code}] {body}",
         }
-    except URLError as e:
+    except (URLError, TimeoutError, ConnectionError) as e:
         return {"role": "assistant", "content": f"[ERREUR /api/chat : {e}]"}
 
 
