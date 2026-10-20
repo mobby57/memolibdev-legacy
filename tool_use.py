@@ -52,6 +52,9 @@ class ToolRegistry:
         ]
 
     def execute(self, name: str, args: dict) -> str:
+        # Garde inconditionnelle : les effets de bord ne passent JAMAIS
+        # par execute(). Les écritures passent par agent_loop -> D5.9.
+        # coder_mode élargit self.allowed mais ne lève pas ce blocage.
         if name in WRITE_TOOL_NAMES or name == "run_command":
             return (
                 f"BLOQUE: écriture directe interdite pour {name}. "

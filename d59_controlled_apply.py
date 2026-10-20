@@ -327,7 +327,9 @@ def post_apply_or_rollback(
     verify_ok, verify_reason = verify(repo_root)
 
     if verify_ok:
-        sha_final = sha256_file(target_file)
+        sha_final = (
+            sha256_file(target_file) if target_file is not None else None
+        )
         return ApplyResult(
             status="APPLIED",
             reason=f"POST_VERIFY PASS: {verify_reason}",
