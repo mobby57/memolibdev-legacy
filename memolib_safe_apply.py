@@ -68,6 +68,8 @@ def main() -> int:
                     help="racine du repo git (defaut: CWD)")
     ap.add_argument("--dry-run", action="store_true",
                     help="pre_apply + git apply --check, aucune ecriture")
+    ap.add_argument("--authorization", default=None,
+                    help="JSON authorization file (required for real apply)")
     ap.add_argument("--skip-pre-hooks", action="store_true")
     ap.add_argument("--skip-post-hooks", action="store_true")
     args = ap.parse_args()
@@ -85,6 +87,32 @@ def main() -> int:
             return 3
 
         diff = _normalize_diff(diff_path.read_text(encoding="utf-8"))
+
+        if args.authorization:
+            import json, hashlib
+            auth_path = Path(args.authorization)
+            if not auth_path.is_file():
+                print(f"ECHEC: authorization introuvable: {auth_path}", file=sys.stderr)
+                return 3
+            try:
+                auth = json.loads(auth_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                print(f"ECHEC: authorization JSON invalide: {e}", file=sys.stderr)
+                return 3
+            proposal_id = auth.get("proposal_id", "")
+            expected_sha = auth.get("expected_diff_sha256", "")
+            if not proposal_id or not proposal_id.startswith("P-"):
+                print("ECHEC: proposal_id manquant ou invalide", file=sys.stderr)
+                return 2
+            if not expected_sha:
+                print("ECHEC: expected_diff_sha256 manquant", file=sys.stderr)
+                return 2
+            actual_sha = hashlib.sha256(diff.encode("utf-8")).hexdigest()
+            if actual_sha != expected_sha:
+                print("ECHEC: diff SHA mismatch", file=sys.stderr)
+                return 2
+            print(f"  authorization OK: {proposal_id}")
+
         head, branch, fp = _compute_target(root)
         target_file = root / rel
         if not target_file.is_file():
@@ -124,10 +152,35 @@ def main() -> int:
             print("\nRESULT: DRY-RUN OK (aucune ecriture)")
             return 0
 
-        # Mesure conservatoire : D5.8 n'est pas valide ici.
-        # Aucune application reelle sans autorisation fiable.
-        print("\nRESULT: BLOCKED (D5.8 authorization required)")
-        print("Application reelle desactivee dans ce CLI.")
+        if not args.authorization:
+            print("\nRESULT: BLOCKED (use --authorization <json> for real apply)")
+            return 2
+
+        from d59_controlled_apply import run_controlled_apply
+
+        def _verify(_repo_root):
+            try:
+                content = target_file.read_text(encoding="utf-8", errors="ignore")
+                if "<<<<<<<" in content or ">>>>>>>" in content:
+                    return False, "conflict markers detected"
+                return True, "no conflict markers"
+            except Exception as e:
+                return False, f"verify error: {e}"
+
+        print("\n[2/2] run_controlled_apply...")
+        result = run_controlled_apply(
+            root, cert, diff,
+            target_head=head,
+            target_fingerprint=fp,
+            verify=_verify,
+        )
+        print(f"  status: {result.status}")
+        print(f"  reason: {result.reason}")
+        print(f"\nRESULT: {result.status}")
+        if result.status == "APPLIED":
+            return 0
+        if result.status == "ROLLED_BACK":
+            return 1
         return 2
 
     except Exception as e:
