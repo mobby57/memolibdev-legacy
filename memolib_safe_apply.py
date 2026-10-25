@@ -28,9 +28,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from d59_controlled_apply import (
-    ApplyCertificate, pre_apply, run_controlled_apply, sha256_file,
+    ApplyCertificate, pre_apply, sha256_file,
 )
-from hook_runner import run_hooks
 from project_target import _compute_fingerprint
 
 
@@ -101,7 +100,6 @@ def main() -> int:
             target_head=head,
             target_fingerprint=fp,
         )
-        hook_dir = root / ".memolib" / "hooks"
 
         print(f"=== memolib safe-apply ===")
         print(f"diff    : {diff_path} ({len(diff)} octets)")
@@ -126,50 +124,12 @@ def main() -> int:
             print("\nRESULT: DRY-RUN OK (aucune ecriture)")
             return 0
 
-        print("[2/3] pre_task hooks...")
-        if args.skip_pre_hooks:
-            print("  SKIP: --skip-pre-hooks")
-        else:
-            h_ok, h_r = run_hooks(
-                "pre_task", hook_dir,
-                {"diff": diff, "target": str(root)},
-            )
-            if not h_ok:
-                print(f"  BLOCKED: {h_r}")
-                print(f"\nRESULT: BLOCKED")
-                return 2
-            print(f"  OK: {h_r}")
-
-        print("[3/3] run_controlled_apply...")
-
-        def verify(_repo_root):
-            if args.skip_post_hooks:
-                return True, "post hooks skipped"
-            return run_hooks(
-                "post_task", hook_dir,
-                {"diff": diff, "target": str(root)},
-            )
-
-        result = run_controlled_apply(
-            root, cert, diff,
-            target_head=head,
-            target_fingerprint=fp,
-            verify=verify,
-        )
-        print(f"  status     : {result.status}")
-        print(f"  reason     : {result.reason}")
-        print(f"  sha_init   : {result.sha_initial}")
-        print(f"  sha_final  : {result.sha_final}")
-        print(f"  rolled_back: {result.rolled_back}")
-        print(f"  committed  : {result.committed}")
-        print(f"  pushed     : {result.pushed}")
-        print(f"\nRESULT: {result.status}")
-
-        if result.status == "APPLIED":
-            return 0
-        if result.status == "ROLLED_BACK":
-            return 1
+        # Mesure conservatoire : D5.8 n'est pas valide ici.
+        # Aucune application reelle sans autorisation fiable.
+        print("\nRESULT: BLOCKED (D5.8 authorization required)")
+        print("Application reelle desactivee dans ce CLI.")
         return 2
+
     except Exception as e:
         print(f"ECHEC technique: {type(e).__name__}: {e}", file=sys.stderr)
         return 3
