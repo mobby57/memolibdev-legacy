@@ -96,15 +96,27 @@ def _git_apply(
 
 
 def extract_targets(patch_text: str) -> list[str]:
-    """Chemins modifiés par le patch (lignes +++ b/...), hors /dev/null."""
+    """
+    Chemins touchés par le patch.
+    Couvre ajouts, modifications, suppressions et renommages.
+    Ignore les entrées /dev/null (côté absent du hunk).
+    """
     targets: list[str] = []
     for line in patch_text.splitlines():
         if line.startswith("+++ b/"):
             path = line[6:].strip()
-            if path == "/dev/null":
-                continue
-            if path not in targets:
-                targets.append(path)
+        elif line.startswith("--- a/"):
+            path = line[6:].strip()
+        elif line.startswith("rename from "):
+            path = line[12:].strip()
+        elif line.startswith("rename to "):
+            path = line[10:].strip()
+        else:
+            continue
+        if not path or path == "/dev/null":
+            continue
+        if path not in targets:
+            targets.append(path)
     return targets
 
 
@@ -234,8 +246,10 @@ def snapshot(
     patch_text: str,
 ) -> dict:
     """
-    Capture l'état réversible : SHA du/des fichier(s) cible(s), HEAD,
+    Capture l'état réversible : octets EXACTS du fichier cible, HEAD,
     SHA du patch. Exige un dépôt propre (fail-closed).
+    Le contenu binaire est stocké pour permettre un rollback qui
+    restaure les octets, sans git checkout (qui écrase les modifs).
     """
     status = run_git(repo_root, "status", "--porcelain")
     if status.returncode != 0:
@@ -251,13 +265,15 @@ def snapshot(
     if target_file is None or not target_file.is_file():
         raise RuntimeError("fichier cible invalide pour snapshot")
 
+    content = target_file.read_bytes()
     return {
         "git_head": head.stdout.strip(),
         "patch_sha256": sha256_text(patch_text),
         "files": [
             {
                 "path": certificate.path,
-                "sha256": sha256_file(target_file),
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "content": content,
             }
         ],
     }
@@ -281,24 +297,26 @@ def controlled_apply(
     return True, "patch appliqué au working tree"
 
 
-def _rollback(repo_root: Path, snap: dict, patch_text: str) -> bool:
+def _rollback(repo_root: Path, snap: dict) -> bool:
     """
-    Restaure l'état d'avant apply. Deux voies, dans l'ordre :
-      1. git apply -R (inverse du patch)
-      2. git checkout -- <fichiers du snapshot> (filet de sécurité)
+    Restaure l'état d'avant apply par écriture ATOMIQUE des octets
+    capturés par snapshot(). Aucune commande git destructive.
     Retourne True si l'état final correspond au snapshot.
     """
-    # Voie 1 : patch inverse (via fichier, robuste sur Windows).
-    _git_apply(repo_root, patch_text, "-R")
-
-    # Voie 2 : checkout des fichiers (idempotent, nettoie tout résidu).
-    for item in snap["files"]:
-        run_git(repo_root, "checkout", "--", item["path"])
-
-    # Vérifie que chaque fichier a retrouvé son SHA initial.
+    import os
     for item in snap["files"]:
         target = safe_repo_path(repo_root, item["path"])
-        if target is None or not target.is_file():
+        if target is None:
+            return False
+        tmp = target.with_name(target.name + ".rollback-tmp")
+        try:
+            tmp.write_bytes(item["content"])
+            os.replace(tmp, target)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
             return False
         if sha256_file(target) != item["sha256"]:
             return False
@@ -349,7 +367,7 @@ def post_apply_or_rollback(
         )
 
     # FAIL -> rollback automatique.
-    restored = _rollback(repo_root, snap, patch_text)
+    restored = _rollback(repo_root, snap)
     sha_final = sha256_file(target_file) if target_file.is_file() else None
 
     return ApplyResult(
