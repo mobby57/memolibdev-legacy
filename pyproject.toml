@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memolibdev"
+version = "0.1.0"
+description = "Assistant de développement 100% local avec contrôle MSAFE"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+authors = [{name = "MemoLibDev", email = "dev@memolib.dev"}]
+keywords = ["ai", "local", "msafe", "assistant", "voice"]
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+    "faster-whisper>=1.0",
+    "piper-tts>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.4", "mypy>=1.10", "bandit>=1.7"]
+
+[project.scripts]
+memolibdev = "memolibdev.api.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --strict-markers"
+markers = ["slow: tests lents", "integration: nécessite Ollama", "security: tests MSAFE"]
+
+[tool.coverage.run]
+source = ["src/memolibdev"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+fail_under = 50
