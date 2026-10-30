@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+
+# Environnement
+.env
+.env.local
+*.token
+
+# Base de données locale
+memolib.db
+*.db-journal
+*.sqlite
+
+# Logs
+*.log
+
+# Backups
+*.bak
+*.bak2
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Builds
+build/
+dist/
+*.egg-info/
