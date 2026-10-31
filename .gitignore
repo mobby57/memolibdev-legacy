@@ -140,3 +140,4 @@ data/
 _debug_last_payload.json
 gemini_backend.py
 groq_backend.py
+*.py.disabled

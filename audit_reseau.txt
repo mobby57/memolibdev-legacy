@@ -1,0 +1,15 @@
+﻿http://{host}:{port}
+http://127.0.0.1:11434
+http://127.0.0.1:11434)
+http://127.0.0.1:11434/api/tags
+http://localhost:11434
+http://localhost:11434/api/generate
+http://localhost:11434/api/tags
+https://api.github.com/search/repositories?q={encoded}&per_page={MAX_RESULTS}
+https://clerk.com/docs/getting-started/quickstart
+https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+https://clerk.com/docs/guides/development/upgrading/upgrade-guides/nextjs-v6
+https://clerk.com/docs/reference/nextjs/clerk-middleware
+https://nextjs.org/docs
+https://ollama.com/download\n
+https://r.jina.ai/
